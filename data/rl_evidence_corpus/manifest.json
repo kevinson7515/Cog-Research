@@ -1,0 +1,17 @@
+{
+  "workspace_dir": "/online1/ycsc_chenkh/hitici_07/Co-Sight-0/work_space/work_space_20260612_134333",
+  "trace_dir": "/online1/ycsc_chenkh/hitici_07/Co-Sight-0/trace",
+  "max_tasks": 0,
+  "max_docs_per_task": 10,
+  "max_chars_per_doc": 2400,
+  "max_trace_items_per_task": 4,
+  "include_trace": true,
+  "include_final_reports": false,
+  "workspace_item_count": 2626,
+  "trace_item_count": 1984,
+  "built_at": "2026-08-31T22:33:20",
+  "task_count": 496,
+  "item_count": 4597,
+  "flat_path": "/online1/ycsc_chenkh/hitici_07/Co-Sight-0/data/rl_evidence_corpus/evidence_corpus.jsonl",
+  "task_evidence_path": "/online1/ycsc_chenkh/hitici_07/Co-Sight-0/data/rl_evidence_corpus/task_evidence.json"
+}

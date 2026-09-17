@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "allowed_tools": [
+    "create_plan",
+    "update_plan",
+    "ask_question_about_image",
+    "ask_question_about_video",
+    "audio_recognition",
+    "serper_search",
+    "tavily_search",
+    "search",
+    "image_search",
+    "fetch_website_content",
+    "fetch_website_content_with_images",
+    "fetch_website_images_only",
+    "file_read",
+    "file_saver",
+    "file_str_replace",
+    "file_find_in_content",
+    "extract_document_content",
+    "execute_code",
+    "generate_markdown_report",
+    "mark_step"
+  ],
+  "evidence_tools": [
+    "ask_question_about_image",
+    "ask_question_about_video",
+    "audio_recognition",
+    "serper_search",
+    "tavily_search",
+    "search",
+    "image_search",
+    "fetch_website_content",
+    "fetch_website_content_with_images",
+    "extract_document_content",
+    "file_read",
+    "execute_code"
+  ],
+  "trusted_source_types": ["trace_tool", "workspace_md"],
+  "blocked_hosts": ["example.com", "localhost", "127.0.0.1", "0.0.0.0"],
+  "require_task_local_url_allowlist": true,
+  "require_evidence_tool_provenance": true
+}
