@@ -457,7 +457,7 @@ export DOTENV_OVERRIDE=false
 
 cd "${PROJECT_ROOT}"
 
-exec python CoSight.py
+exec python CogResearch.py
 COSIGHT_CONTAINER
 
 echo "Job finished."

@@ -1,5 +1,4 @@
-# Copyright 2025 ZTE Corporation.
-# All Rights Reserved.
+
 
 import copy
 import json

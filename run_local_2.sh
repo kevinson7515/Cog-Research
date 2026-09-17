@@ -225,7 +225,7 @@ fi
 
 # Compatibility aliases for code that still references the old DeepResearch
 # variable names. DEEPRESEARCH_TASKS_PATH is intentionally set only for custom
-# single-file runs above; otherwise CoSight_2.py uses MIROEVAL_SPLIT.
+# single-file runs above; otherwise CogResearch_2.py uses MIROEVAL_SPLIT.
 export DEEPRESEARCH_START_INDEX="${DEEPRESEARCH_START_INDEX:-${MIROEVAL_START_INDEX}}"
 export DEEPRESEARCH_MAX_TASKS="${DEEPRESEARCH_MAX_TASKS:-${MIROEVAL_MAX_TASKS}}"
 export DEEPRESEARCH_WORKSPACE_ROOT="${DEEPRESEARCH_WORKSPACE_ROOT:-${MIROEVAL_WORKSPACE_ROOT}}"
@@ -485,7 +485,7 @@ singularity exec --nv \
   -B "${PROJECT_BIND}" \
   -B "/online1/public" \
   "${SIF_IMAGE}" \
-  bash -s <<'COSIGHT_CONTAINER'
+  bash -s <<'CogResearch_CONTAINER'
 set -euo pipefail
 
 unset SSL_CERT_FILE
@@ -500,7 +500,7 @@ export DOTENV_OVERRIDE=false
 
 cd "${PROJECT_ROOT}"
 
-exec python CoSight_2.py
-COSIGHT_CONTAINER
+exec python CogResearch_2.py
+CogResearch_CONTAINER
 
 echo "Job finished."

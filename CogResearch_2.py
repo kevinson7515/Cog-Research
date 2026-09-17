@@ -1,9 +1,8 @@
-# Copyright 2025 ZTE Corporation.
-# All Rights Reserved.
+
 """MiroEval runner for Co-Sight.
 
-This entry point intentionally leaves ``CoSight.py`` untouched. It reuses the
-same CoSight runtime, but reads MiroEval text-only and multimodal records where
+This entry point intentionally leaves ``CogResearch.py`` untouched. It reuses the
+same CogResearch runtime, but reads MiroEval text-only and multimodal records where
 the task text lives in ``rewritten_query``. Multimodal records may include local
 image or document attachments under the ``files`` field.
 """
@@ -19,7 +18,7 @@ from collections import Counter
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 from urllib.parse import urlparse
 
-from CoSight import CoSight
+from CogResearch import CogResearch
 from app.common.logger_util import logger
 from llm import llm_for_act, llm_for_plan, llm_for_tool, llm_for_vision
 
@@ -207,7 +206,7 @@ def _build_attached_files(
             raise ValueError(f"Attachment {index} has no dir/path/file/filename/url")
 
         if _looks_like_url(raw_path):
-            logger.warning(f"URL attachment is not supported by CoSight attached_files: {raw_path}")
+            logger.warning(f"URL attachment is not supported by CogResearch attached_files: {raw_path}")
             missing_files.append(raw_path)
             continue
 
@@ -411,7 +410,7 @@ def main() -> None:
                     f"(idx={idx}; attachments={len(attached_files)}) =========="
                 )
 
-                cosight = CoSight(
+                cosight = CogResearch(
                     plan_llm=llm_for_plan,
                     act_llm=llm_for_act,
                     tool_llm=llm_for_tool,

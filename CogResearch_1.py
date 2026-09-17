@@ -1,9 +1,8 @@
-# Copyright 2025 ZTE Corporation.
-# All Rights Reserved.
+
 """Text-only DeepResearch-Bench II runner for Co-Sight.
 
-This entry point intentionally leaves ``CoSight.py`` untouched. It reuses the
-same CoSight runtime, but reads ``data/tasks_and_rubrics.jsonl`` records where
+This entry point intentionally leaves ``CogResearch.py`` untouched. It reuses the
+same CogResearch runtime, but reads ``data/tasks_and_rubrics.jsonl`` records where
 the task text lives in ``prompt`` and no image attachments are supplied.
 """
 
@@ -16,7 +15,7 @@ import re
 import time
 from typing import Any, Dict, Iterable, Tuple
 
-from CoSight import CoSight
+from CogResearch import CogResearch
 from app.common.logger_util import logger
 from llm import llm_for_act, llm_for_plan, llm_for_tool, llm_for_vision
 
@@ -170,7 +169,7 @@ def main() -> None:
             question = _build_question(task_data)
             logger.info(f"========== Start DeepResearch task: {raw_id} (idx={idx}) ==========")
 
-            cosight = CoSight(
+            cosight = CogResearch(
                 plan_llm=llm_for_plan,
                 act_llm=llm_for_act,
                 tool_llm=llm_for_tool,

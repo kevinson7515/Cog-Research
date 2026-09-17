@@ -144,7 +144,7 @@ singularity exec --nv \
     # Allow runtime exports to win over .env (see config/config.py)
     export DOTENV_OVERRIDE=false
 
-    python CoSight.py
+    python CogResearch.py
   "
 
 echo "Job Finished."

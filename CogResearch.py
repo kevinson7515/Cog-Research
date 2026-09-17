@@ -1,17 +1,3 @@
-# Copyright 2025 ZTE Corporation.
-# All Rights Reserved.
-#
-#    Licensed under the Apache License, Version 2.0 (the "License"); you may
-#    not use this file except in compliance with the License. You may obtain
-#    a copy of the License at
-#
-#         http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-#    License for the specific language governing permissions and limitations
-#    under the License.
 from datetime import datetime
 from app.cosight.agent.actor.instance.actor_agent_instance import create_actor_instance
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
@@ -36,7 +22,7 @@ from app.common.logger_util import logger
 import json
 
 
-class CoSight:
+class CogResearch:
     def __init__(self, plan_llm, act_llm, tool_llm, vision_llm, work_space_path: str = None, message_uuid: str|None = None, trace_dir: str = None):
         self.work_space_path = work_space_path or os.getenv("WORKSPACE_PATH") or os.getcwd()
         self.plan_id = message_uuid if message_uuid else f"plan_{int(time.time())}"
@@ -256,7 +242,7 @@ class CoSight:
 #     os.makedirs(work_space_path, exist_ok=True)
 
 #     # 配置CoSight
-#     cosight = CoSight(llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision, work_space_path)
+#     cosight = CogResearch(llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision, work_space_path)
 
 #     # 运行CoSight
 #     # result = cosight.execute("帮我写一篇中兴通讯的分析报告")
@@ -327,7 +313,7 @@ if __name__ == '__main__':
                     
                     # 4. 重新实例化 CoSight，确保 Plan 和 Trace 上下文是干净的
                     # 使用唯一的 message_uuid 避免 TaskManager 的 plan 冲突
-                    cosight = CoSight(
+                    cosight = CogResearch(
                         plan_llm=llm_for_plan, 
                         act_llm=llm_for_act, 
                         tool_llm=llm_for_tool, 
@@ -416,7 +402,7 @@ if __name__ == '__main__':
                     
 #                     # 4. 重新实例化 CoSight，确保 Plan 和 Trace 上下文是干净的
 #                     # 使用唯一的 message_uuid 避免 TaskManager 的 plan 冲突
-#                     cosight = CoSight(
+#                     cosight = CogResearch(
 #                         plan_llm=llm_for_plan, 
 #                         act_llm=llm_for_act, 
 #                         tool_llm=llm_for_tool, 

@@ -213,7 +213,7 @@ for name, cfg in configs.items():
     )
 PY
 
-    python CoSight.py
+    python CogResearch.py
   "
 
 echo "Merged-model test finished."

@@ -1,18 +1,3 @@
-# Copyright 2025 ZTE Corporation.
-# All Rights Reserved.
-#
-#    Licensed under the Apache License, Version 2.0 (the "License"); you may
-#    not use this file except in compliance with the License. You may obtain
-#    a copy of the License at
-#
-#         http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-#    License for the specific language governing permissions and limitations
-#    under the License.
-
 import json
 import asyncio
 import os
@@ -32,7 +17,7 @@ from app.common.logger_util import logger
 # 引入CoSight所需的依赖
 from app.cosight.task.plan_report_manager import plan_report_event_manager
 from app.cosight.task.todolist import Plan
-from CoSight import CoSight
+from CogResearch import CogResearch
 
 searchRouter = APIRouter()
 
@@ -423,7 +408,7 @@ async def search(request: Request, params: Any = Body(None)):
         work_space_path_time = os.path.join(work_space_path, f'work_space_{timestamp}')
         print(f"work_space_path_time:{work_space_path_time}")
         os.makedirs(work_space_path_time, exist_ok=True)
-        # 将工作空间路径存储到环境变量，供 RecordGenerator 和 CoSight 使用
+        # 将工作空间路径存储到环境变量，供 RecordGenerator 和 CogResearch 使用
         os.environ['WORKSPACE_PATH'] = work_space_path_time
     else:
         # 回放场景下不需要新的工作区目录，这里仅占位，RecordGenerator 会使用 replayWorkspace
@@ -616,7 +601,7 @@ async def search(request: Request, params: Any = Body(None)):
 
                 # 初始化CoSight并传入plan_id
                 logger.info(f"llm is {llm_for_plan.model}, {llm_for_plan.base_url}, api_key=***")
-                cosight = CoSight(
+                cosight = CogResearch(
                     llm_for_plan,
                     llm_for_act,
                     llm_for_tool,

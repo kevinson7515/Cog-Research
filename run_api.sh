@@ -23,7 +23,7 @@ CONDA_ENV="${CONDA_ENV:-/home/export/base/ycsc_chenkh/hitici_07/online1/anaconda
 
 QUIZ_FILE_PATH="${QUIZ_FILE_PATH:-${PROJECT_ROOT}/data/quiz_train.jsonl}"
 QUIZ_IMAGE_BASE_DIR="${QUIZ_IMAGE_BASE_DIR:-${PROJECT_ROOT}/data/images}"
-COSIGHT_TRACE_DIR="${COSIGHT_TRACE_DIR:-${PROJECT_ROOT}/trace}"
+CogResearch_TRACE_DIR="${CogResearch_TRACE_DIR:-${PROJECT_ROOT}/trace}"
 
 HTTP_PROXY_VALUE="${HTTP_PROXY_VALUE:-http://174.0.250.13:3128}"
 HTTPS_PROXY_VALUE="${HTTPS_PROXY_VALUE:-http://174.0.250.13:3128}"
@@ -66,13 +66,13 @@ REPORT_MAX_CONTENT_LENGTH="${REPORT_MAX_CONTENT_LENGTH:-60000}"
 REPORT_MAX_FILE_PREVIEW_LENGTH="${REPORT_MAX_FILE_PREVIEW_LENGTH:-8000}"
 LLM_TIMEOUT="${LLM_TIMEOUT:-900}"
 
-mkdir -p "${PROJECT_ROOT}/logs" "${COSIGHT_TRACE_DIR}"
+mkdir -p "${PROJECT_ROOT}/logs" "${CogResearch_TRACE_DIR}"
 
 echo "Starting cog-research trajectory generation in API mode."
 echo "Project root: ${PROJECT_ROOT}"
 echo "Quiz file: ${QUIZ_FILE_PATH}"
 echo "Image dir: ${QUIZ_IMAGE_BASE_DIR}"
-echo "Trace dir: ${COSIGHT_TRACE_DIR}"
+echo "Trace dir: ${CogResearch_TRACE_DIR}"
 echo "API base URL: ${API_RUN_BASE_URL}"
 echo "Planner/actor/tool model: ${API_RUN_MODEL_NAME}"
 echo "Vision model: ${VISION_RUN_MODEL_NAME}"
@@ -129,7 +129,7 @@ singularity exec \
 
     export QUIZ_FILE_PATH='${QUIZ_FILE_PATH}'
     export QUIZ_IMAGE_BASE_DIR='${QUIZ_IMAGE_BASE_DIR}'
-    export COSIGHT_TRACE_DIR='${COSIGHT_TRACE_DIR}'
+    export CogResearch_TRACE_DIR='${CogResearch_TRACE_DIR}'
 
     export MAX_TOKENS='${MAX_TOKENS}'
     export PLAN_MAX_TOKENS='${PLAN_MAX_TOKENS}'
@@ -197,8 +197,8 @@ if bad:
     sys.exit(2)
 PY
 
-    python CoSight.py
+    python CogResearch.py
   "
 
 echo "API trajectory generation finished."
-echo "Trace output: ${COSIGHT_TRACE_DIR}"
+echo "Trace output: ${CogResearch_TRACE_DIR}"
