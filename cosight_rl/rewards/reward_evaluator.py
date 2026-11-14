@@ -24,31 +24,57 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 try:
+    from .combined_report_reward import score_combined_evidence
     from .repetition import compute_repetition_metrics
+    from .report_rubric import parse_structured_rubric, score_structured_rubric
 except ImportError:  # JADE loads custom rewards via spec_from_file_location.
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
+    from cosight_rl.rewards.combined_report_reward import score_combined_evidence
     from cosight_rl.rewards.repetition import compute_repetition_metrics
+    from cosight_rl.rewards.report_rubric import parse_structured_rubric, score_structured_rubric
 
 
 FAILURE_CAPS = {
     "empty_or_crashed": 0.05,
-    "wrong_visual_identity": 0.15,
+    # "wrong_visual_identity": 0.15,  # Inactive in the paper's training runs.
     "fabricated_source_data": 0.20,
     "repetition_collapse": 0.25,
     "format_instruction_fail": 0.35,
-    "core_quant_error": 0.40,
+    # "core_quant_error": 0.40,  # Inactive; no independent quantitative gate.
 }
 
+# Section 4.4.2 uses these published, rounded coefficients exactly. The old
+# non-workflow weights divided by 0.92 are NOT the published coefficients.
 REWARD_WEIGHTS = {
-    "R_visual_grounding": 0.30,
-    "R_evidence_factuality": 0.25,
-    "R_task_following": 0.15,
-    "R_quantitative_reasoning": 0.12,
-    "R_report_quality": 0.10,
-    "R_workflow": 0.08,
+    "R_visual_grounding": 0.33,
+    "R_evidence_factuality": 0.27,
+    "R_task_following": 0.16,
+    "R_quantitative_reasoning": 0.13,
+    "R_report_quality": 0.11,
+    # "R_workflow": 0.08,  # Constant in the audited runs; excluded from reward.
 }
+
+RUBRIC_DIMENSIONS = {
+    "R_visual_grounding": "MM",
+    "R_evidence_factuality": "EVI",
+    "R_task_following": "GEN",
+    "R_quantitative_reasoning": "VEF",
+    "R_report_quality": "PRES",
+}
+
+
+def hard_gates_enabled() -> bool:
+    """Read at scoring time so worker processes and offline audits agree."""
+    return _enabled("COSIGHT_ENABLE_HARD_GATES")
+
+
+def _enabled(name: str) -> bool:
+    value = os.getenv(name, "1").strip().lower()
+    if value not in {"0", "1", "false", "true", "no", "yes", "off", "on"}:
+        raise ValueError(f"{name} must be a boolean (0/1).")
+    return value in {"1", "true", "yes", "on"}
 
 
 @dataclass
@@ -58,16 +84,21 @@ class RewardResult:
     final_reward: float
     raw_reward: float
     reward_cap: float
+    clipped_raw_reward: float = 0.0
+    hard_gates_enabled: bool = True
     hard_gate_reasons: List[str] = field(default_factory=list)
     R_visual_grounding: float = 0.5
     R_evidence_factuality: float = 0.5
     R_task_following: float = 0.5
     R_quantitative_reasoning: float = 0.5
     R_report_quality: float = 0.5
-    R_workflow: float = 0.5
+    # Deprecated compatibility fields, fixed at zero and excluded from scoring.
+    R_workflow: float = 0.0
     P_cost: float = 0.0
-    P_invalid_tool: float = 0.0
-    P_repeat_soft: float = 0.0
+    P_invalid: float = 0.0
+    P_repeat: float = 0.0
+    R_rubric: float = 0.0
+    rubric_dimension_scores: Dict[str, float] = field(default_factory=dict)
     repetition_metrics: Dict[str, Any] = field(default_factory=dict)
     short_diagnosis: str = ""
     details: Dict[str, Any] = field(default_factory=dict)
@@ -88,8 +119,10 @@ class RewardResult:
         data["report_quality"] = data["R_report_quality"]
         data["workflow"] = data["R_workflow"]
         data["cost_penalty"] = data["P_cost"]
-        data["invalid_tool_penalty"] = data["P_invalid_tool"]
-        data["repetition_penalty"] = data["P_repeat_soft"]
+        data["P_invalid_tool"] = data["P_invalid"]  # Legacy aliases.
+        data["P_repeat_soft"] = data["P_repeat"]
+        data["invalid_tool_penalty"] = data["P_invalid"]
+        data["repetition_penalty"] = data["P_repeat"]
         data["repetition"] = data["repetition_metrics"]
         return data
 
@@ -170,6 +203,9 @@ def _normalize_url(url: str) -> str:
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path, parts.query, parts.fragment))
 
 
+_REFERENCE_LINE = re.compile(r"^\s*(?:[-*+]\s*)?\[(\d+)\]\s*(?::|\s)\s*(.*)$")
+
+
 def _citation_integrity_details(text: str) -> Dict[str, Any]:
     """Audit the numeric citation contract used by MMDR/TRACE.
 
@@ -181,9 +217,8 @@ def _citation_integrity_details(text: str) -> Dict[str, Any]:
 
     mapping: Dict[str, List[str]] = {}
     body_lines: List[str] = []
-    reference_line_re = re.compile(r"^\s*(?:[-*+]\s*)?\[(\d+)\]\s*(?::|\s)\s*(.*)$")
     for line in (text or "").splitlines():
-        match = reference_line_re.match(line)
+        match = _REFERENCE_LINE.match(line)
         line_urls = extract_urls(match.group(2)) if match else []
         if match and line_urls:
             mapping.setdefault(match.group(1), []).extend(_normalize_url(url) for url in line_urls)
@@ -496,15 +531,15 @@ def _local_evidence_details(
     }
 
 
-def _legacy_local_evidence_score(text: str, details: Mapping[str, Any]) -> float:
+def _legacy_local_evidence_score(text: str, details: Mapping[str, Any], use_provenance: bool) -> float:
     if not details.get("item_count"):
         return 0.50
 
     url_count = int(details.get("url_count", 0))
     host_count = int(details.get("host_count", 0))
-    exact_hits = len(details.get("exact_url_hits") or [])
-    host_hits = len(details.get("host_hits") or [])
-    title_hits = len(details.get("title_hits") or [])
+    exact_hits = len(details.get("exact_url_hits") or []) if use_provenance else 0
+    host_hits = len(details.get("host_hits") or []) if use_provenance else 0
+    title_hits = len(details.get("title_hits") or []) if use_provenance else 0
     source_section = bool(
         re.search(
             r"^#{1,3}\s*(references?|sources?|bibliography|\u53c2\u8003|\u6765\u6e90|\u53c2\u8003\u6587\u732e)",
@@ -525,11 +560,11 @@ def _legacy_local_evidence_score(text: str, details: Mapping[str, Any]) -> float
     return clamp(score)
 
 
-def _local_evidence_score(text: str, details: Mapping[str, Any]) -> float:
+def _local_evidence_score(text: str, details: Mapping[str, Any], use_provenance: bool) -> float:
     if not details.get("item_count"):
         return 0.50
 
-    legacy = _legacy_local_evidence_score(text, details)
+    legacy = _legacy_local_evidence_score(text, details, use_provenance)
     url_count = int(details.get("url_count", 0))
     mapped_urls = list(details.get("mapped_urls") or [])
     if not url_count:
@@ -538,10 +573,12 @@ def _local_evidence_score(text: str, details: Mapping[str, Any]) -> float:
         aligned = 0.08
     else:
         claim_coverage = float(details.get("claim_citation_coverage", 0.0))
+        precision = float(details.get("report_url_precision", 0.0)) if use_provenance else 0.0
+        coverage = float(details.get("evidence_url_coverage", 0.0)) if use_provenance else 0.0
         aligned = (
             0.05
-            + 0.30 * float(details.get("report_url_precision", 0.0))
-            + 0.15 * float(details.get("evidence_url_coverage", 0.0))
+            + 0.30 * precision
+            + 0.15 * coverage
             + 0.20 * float(details.get("mapping_integrity", 0.0))
             + 0.25 * claim_coverage
         )
@@ -569,6 +606,7 @@ def _combined_evidence_factuality_score(
     text: str,
     citation_details: Mapping[str, Any],
     local_evidence_details: Mapping[str, Any],
+    use_provenance: bool,
 ) -> Dict[str, float]:
     """Score evidence fidelity with citation integrity and optional local evidence.
 
@@ -580,7 +618,7 @@ def _combined_evidence_factuality_score(
     """
 
     citation_aligned = _citation_aligned_evidence_factuality_score(text, citation_details)
-    local_score = _local_evidence_score(text, local_evidence_details)
+    local_score = _local_evidence_score(text, local_evidence_details, use_provenance)
     if local_evidence_details.get("item_count"):
         local_strength = clamp(_env_float("COSIGHT_LOCAL_EVIDENCE_STRENGTH", 0.45))
         combined = (1.0 - local_strength) * citation_aligned + local_strength * local_score
@@ -729,35 +767,6 @@ def _collect_tool_names(extra_info: Mapping[str, Any]) -> List[str]:
     return names
 
 
-def _workflow_score(extra_info: Mapping[str, Any]) -> float:
-    names = set(_collect_tool_names(extra_info))
-    if not names:
-        return 0.50
-    score = 0.30
-    if "ask_question_about_image" in names:
-        score += 0.16
-    if "file_saver" in names:
-        score += 0.14
-    if "generate_markdown_report" in names:
-        score += 0.20
-    if "mark_step" in names:
-        score += 0.06
-    research_tools = {
-        "serper_search",
-        "tavily_search",
-        "search",
-        "image_search",
-        "fetch_website_content",
-        "fetch_website_content_with_images",
-        "file_read",
-        "extract_document_content",
-        "execute_code",
-    }
-    if names.intersection(research_tools):
-        score += 0.12
-    return clamp(score)
-
-
 def classify_benchmark_reason(reason: str) -> Dict[str, Any]:
     """Classify a judge reason into hard-failure tags used by the scorer."""
 
@@ -802,7 +811,9 @@ def classify_benchmark_reason(reason: str) -> Dict[str, Any]:
             r"\u91cd\u590d\u5d29\u574f|\u5927\u91cf\u91cd\u590d|\u62a5\u544a\u5d29\u574f",
         ],
     }
-    tags = [tag for tag, patterns in specs.items() if any(re.search(pattern, reason, re.IGNORECASE | re.DOTALL) for pattern in patterns)]
+    # Retired visual/quantitative labels remain in the legacy vocabulary above,
+    # but cannot activate a cap or affect the reward.
+    tags = [tag for tag, patterns in specs.items() if tag in FAILURE_CAPS and any(re.search(pattern, reason, re.IGNORECASE | re.DOTALL) for pattern in patterns)]
     cap = min([FAILURE_CAPS[tag] for tag in tags], default=1.0)
     positive = bool(re.search(r"excellent|outstanding|near-perfect|high-quality|accurate", reason, re.IGNORECASE))
     failed = bool(tags or re.search(r"catastrophic|complete failure|fundamentally flawed|invalidates|misleading", reason, re.IGNORECASE))
@@ -840,6 +851,8 @@ def _hard_gates(
     extra_info: Mapping[str, Any],
     repetition_metrics: Mapping[str, Any],
     evidence_details: Mapping[str, Any],
+    *,
+    use_provenance: bool,
 ) -> List[str]:
     reasons: List[str] = []
     stripped = text.strip()
@@ -878,7 +891,7 @@ def _hard_gates(
     if mapping_count >= 8 and orphan_ratio >= 0.60:
         reasons.append("fabricated_source_data")
 
-    if local_evidence_details.get("item_count"):
+    if use_provenance and local_evidence_details.get("item_count"):
         mapped_urls = list(local_evidence_details.get("mapped_urls") or [])
         report_url_precision = float(local_evidence_details.get("report_url_precision", 0.0))
         if len(mapped_urls) >= 4 and report_url_precision < 0.25:
@@ -916,25 +929,52 @@ def evaluate_report(
     task_prompt: str = "",
     extra_info: Optional[Mapping[str, Any]] = None,
     ground_truth: Any = None,
+    *,
+    enable_hard_gates: Optional[bool] = None,
+    enable_source_provenance: Optional[bool] = None,
+    combined_report_reward: bool = False,
 ) -> Dict[str, Any]:
-    """Evaluate a final report and return a decomposed reward dictionary."""
+    """Evaluate the paper's five-component report reward.
+
+    ``enable_hard_gates=False`` removes P_invalid, P_repeat and all report
+    caps. It preserves the five component scores, including repetition inside
+    H_report, so the ablation changes only the failure-control bundle.
+    ``enable_source_provenance=False`` zeroes the evidence-pool match features
+    and skips the low pool-precision cap. Citation structure stays scored.
+    ``combined_report_reward=True`` uses trusted, source-specific evidence from
+    ground_truth to update the evidence component before applying the gates.
+    ``raw_reward`` is pre-clipping R_raw; ``clipped_raw_reward`` is clip(R_raw).
+    """
 
     text = str(report_text or "")
     extra = dict(extra_info or {}) if isinstance(extra_info, Mapping) else {}
     ground_truth_text = _stringify(ground_truth)
-    rubric = ""
+    rubric_value: Any = None
     if isinstance(ground_truth, Mapping):
-        rubric = str(ground_truth.get("rubric") or "")
-    rubric = rubric or str(extra.get("rubric") or "")
+        rubric_value = ground_truth.get("rubric")
+        if rubric_value is None and "dimensions" in ground_truth:
+            rubric_value = ground_truth
+    rubric_value = rubric_value or extra.get("rubric") or ""
+    if isinstance(rubric_value, str):
+        try:
+            decoded_rubric = json.loads(rubric_value)
+        except ValueError:
+            decoded_rubric = None
+        if isinstance(decoded_rubric, Mapping):
+            rubric_value = decoded_rubric
+    structured_rubric = parse_structured_rubric(rubric_value)
+    rubric = _stringify(rubric_value)
     prompt = task_prompt or str(
         extra.get("task_prompt")
         or extra.get("body")
         or extra.get("query")
         or extra.get("question")
-        or ground_truth_text
+        or ("" if isinstance(ground_truth, Mapping) and ("rubric" in ground_truth or "dimensions" in ground_truth) else ground_truth_text)
         or ""
     )
-    prompt_for_scoring = f"{prompt}\n\nRubric:\n{rubric}" if rubric else prompt
+    # Structured criteria are evaluated separately below, never as user format
+    # requirements. Legacy free-text rubrics retain the old heuristic fallback.
+    prompt_for_scoring = f"{prompt}\n\nRubric:\n{rubric}" if rubric and not isinstance(rubric_value, Mapping) else prompt
 
     repetition_metrics = compute_repetition_metrics(text)
     expected_images = _extract_expected_images(extra)
@@ -942,7 +982,8 @@ def evaluate_report(
     citation_details = _citation_integrity_details(text)
     local_evidence = _local_evidence_items(extra, ground_truth)
     local_evidence_details = _local_evidence_details(text, local_evidence, citation_details)
-    evidence_scores = _combined_evidence_factuality_score(text, citation_details, local_evidence_details)
+    use_provenance = _enabled("COSIGHT_ENABLE_SOURCE_PROVENANCE") if enable_source_provenance is None else enable_source_provenance
+    evidence_scores = _combined_evidence_factuality_score(text, citation_details, local_evidence_details, use_provenance)
     evidence_details = {
         "urls": urls,
         "bad_urls": broken_url_like_count(urls),
@@ -955,48 +996,84 @@ def evaluate_report(
     evidence = evidence_scores["combined"]
     task = _task_following_score(text, prompt_for_scoring, extra)
     quant = _quantitative_reasoning_score(text, prompt_for_scoring)
-    repeat_penalty = float(repetition_metrics.get("P_repeat_soft", 0.0))
-    report_quality = _report_quality_score(text, task, repeat_penalty)
-    workflow = _workflow_score(extra)
+    detected_repeat_penalty = float(repetition_metrics.get("P_repeat_soft", 0.0))
+    report_quality = _report_quality_score(text, task, detected_repeat_penalty)
+    # workflow = _workflow_score(extra)  # Inactive R_workflow: not in the paper.
 
-    cost_penalty = min(0.08, max(0, len(text) - 120000) / 1200000)
+    # P_cost = min(0.08, max(0, len(text) - 120000) / 1200000)
+    # Inactive cost penalty: retained only as a comment, never subtracted.
     tool_errors = _as_list(extra.get("tool_errors")) + _as_list(extra.get("invalid_tool_calls"))
-    invalid_tool_penalty = min(0.20, len(tool_errors) * 0.05)
+    detected_invalid_penalty = min(0.20, len(tool_errors) * 0.05)
 
-    scores = {
+    heuristic_scores = {
         "R_visual_grounding": visual,
         "R_evidence_factuality": evidence,
         "R_task_following": task,
         "R_quantitative_reasoning": quant,
         "R_report_quality": report_quality,
-        "R_workflow": workflow,
     }
+    rubric_details = score_structured_rubric(text, structured_rubric, citation_details) if structured_rubric else {}
+    rubric_scores = rubric_details.get("dimension_scores", {})
+    scores = {
+        key: 0.70 * value + 0.30 * rubric_scores[RUBRIC_DIMENSIONS[key]]
+        if structured_rubric else value
+        for key, value in heuristic_scores.items()
+    }
+    claim_diagnostics = {}
+    if combined_report_reward:
+        original_evidence = scores["R_evidence_factuality"]
+        if not isinstance(ground_truth, Mapping) or "claim_source_evidence" not in ground_truth:
+            raise ValueError("Combined report reward needs claim_source_evidence in ground_truth. Reprepare the RL data.")
+        raw_evidence = ground_truth["claim_source_evidence"]
+        combined, counts, decided, total = score_combined_evidence(
+            text, original_evidence, raw_evidence if use_provenance else None, _REFERENCE_LINE,
+            extract_urls, _normalize_url,
+        )
+        scores["R_evidence_factuality"] = clamp(combined)
+        claim_diagnostics = {
+            "claim_verifier_counts": dict(counts),
+            "claim_verifier_candidates": total,
+            "claim_verifier_decisions": decided,
+            "claim_verifier_coverage": decided / max(1, total),
+            "original_evidence_factuality": original_evidence,
+        }
+    gates_enabled = hard_gates_enabled() if enable_hard_gates is None else enable_hard_gates
+    invalid_tool_penalty = detected_invalid_penalty if gates_enabled else 0.0
+    repeat_penalty = detected_repeat_penalty if gates_enabled else 0.0
     raw = sum(REWARD_WEIGHTS[key] * value for key, value in scores.items())
-    raw -= cost_penalty + invalid_tool_penalty + repeat_penalty
-    raw = clamp(raw)
+    raw -= invalid_tool_penalty + repeat_penalty
+    clipped_raw = clamp(raw)
 
-    hard_gate_reasons = _hard_gates(text, prompt_for_scoring, extra, repetition_metrics, evidence_details)
+    detected_gate_reasons = _hard_gates(
+        text, prompt_for_scoring, extra, repetition_metrics, evidence_details, use_provenance=use_provenance,
+    )
+    hard_gate_reasons = detected_gate_reasons if gates_enabled else []
     reward_cap = min([FAILURE_CAPS[reason] for reason in hard_gate_reasons], default=1.0)
-    final_reward = clamp(min(raw, reward_cap))
+    final_reward = min(clipped_raw, reward_cap)
 
     tool_names = sorted(set(_collect_tool_names(extra)))
     result = RewardResult(
         final_reward=final_reward,
         raw_reward=raw,
+        clipped_raw_reward=clipped_raw,
+        hard_gates_enabled=gates_enabled,
         reward_cap=reward_cap,
         hard_gate_reasons=hard_gate_reasons,
-        R_visual_grounding=visual,
-        R_evidence_factuality=evidence,
-        R_task_following=task,
-        R_quantitative_reasoning=quant,
-        R_report_quality=report_quality,
-        R_workflow=workflow,
-        P_cost=cost_penalty,
-        P_invalid_tool=invalid_tool_penalty,
-        P_repeat_soft=repeat_penalty,
+        **scores,
+        P_invalid=invalid_tool_penalty,
+        P_repeat=repeat_penalty,
+        R_rubric=rubric_details.get("R_rubric", 0.0),
+        rubric_dimension_scores=rubric_scores,
         repetition_metrics=dict(repetition_metrics),
         short_diagnosis=_short_diagnosis(hard_gate_reasons, repetition_metrics, scores),
         details={
+            "reward_weights": dict(REWARD_WEIGHTS),
+            "heuristic_scores": heuristic_scores,
+            "structured_rubric": rubric_details,
+            "structured_rubric_valid": structured_rubric is not None,
+            "detected_hard_gate_reasons": detected_gate_reasons,
+            "detected_penalties": {"P_invalid": detected_invalid_penalty, "P_repeat": detected_repeat_penalty},
+            "invalid_tool_count": len(tool_errors),
             "expected_images": expected_images,
             "image_coverage": _image_coverage(text, expected_images),
             "url_count": len(urls),
@@ -1004,6 +1081,7 @@ def evaluate_report(
             "future_year_count": evidence_details["future_years"],
             "citation_integrity": citation_details,
             "local_evidence": local_evidence_details,
+            "source_provenance_enabled": use_provenance,
             "evidence_score_components": evidence_scores,
             "tool_names": tool_names,
             "tool_call_count": len(_collect_tool_names(extra)),
@@ -1011,10 +1089,21 @@ def evaluate_report(
             "estimated_tokens": int(len(text) / 4),
         },
     )
-    return result.to_dict()
+    output = result.to_dict()
+    if combined_report_reward:
+        output["details"].update(claim_diagnostics)
+        output["claim_verifier_coverage"] = claim_diagnostics["claim_verifier_coverage"]
+        output["claim_verifier_decisions"] = claim_diagnostics["claim_verifier_decisions"]
+        output["claim_verifier_contradictions"] = counts.get("contradicted", 0)
+        output["claim_verifier_wrong_sources"] = counts.get("wrong_source", 0)
+        output["claim_verifier_lexical_matches"] = counts.get("lexical_match", 0)
+    return output
 
 
-def score_solution(solution_str: str, ground_truth: Any = None, extra_info: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+def score_solution(
+    solution_str: str, ground_truth: Any = None, extra_info: Optional[Mapping[str, Any]] = None,
+    *, enable_hard_gates: Optional[bool] = None, combined_report_reward: bool = False,
+) -> Dict[str, Any]:
     """Score a solution string with optional VERL ground truth and extra info."""
 
     if isinstance(ground_truth, Mapping):
@@ -1027,7 +1116,10 @@ def score_solution(solution_str: str, ground_truth: Any = None, extra_info: Opti
         )
     else:
         task_prompt = _stringify(ground_truth)
-    return evaluate_report(solution_str, task_prompt=task_prompt, extra_info=extra_info, ground_truth=ground_truth)
+    return evaluate_report(
+        solution_str, task_prompt=task_prompt, extra_info=extra_info, ground_truth=ground_truth,
+        enable_hard_gates=enable_hard_gates, combined_report_reward=combined_report_reward,
+    )
 
 
 def compute_score(
@@ -1035,11 +1127,16 @@ def compute_score(
     solution_str: str,
     ground_truth: Any,
     extra_info: Optional[Mapping[str, Any]] = None,
+    enable_hard_gates: Optional[bool] = None,
+    combined_report_reward: bool = False,
     **_: Any,
 ) -> Dict[str, Any]:
     """VERL-compatible custom reward function."""
 
-    result = score_solution(solution_str, ground_truth=ground_truth, extra_info=extra_info)
+    result = score_solution(
+        solution_str, ground_truth=ground_truth, extra_info=extra_info,
+        enable_hard_gates=enable_hard_gates, combined_report_reward=combined_report_reward,
+    )
     result["data_source"] = data_source
     result["score"] = result["final_reward"]
     return result
@@ -1054,5 +1151,6 @@ __all__ = [
     "compute_score",
     "evaluate_report",
     "extract_urls",
+    "hard_gates_enabled",
     "score_solution",
 ]

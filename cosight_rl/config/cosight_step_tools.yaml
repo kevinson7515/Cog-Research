@@ -1,0 +1,56 @@
+tools:
+  - class_name: "cosight_rl.tools.trajectory_tool.CoSightTrajectoryTool"
+    config:
+      type: native
+    tool_schema:
+      type: "function"
+      function:
+        name: "cosight_step"
+        description: >-
+          Operate the persistent Co-Sight Plan-and-Act workspace. First create a
+          DAG plan with 2-12 steps, then search grounded evidence and save dependency-valid step
+          results, inspect frozen visual observations when raw-pixel rollout is
+          unavailable, and finally submit the complete Markdown report.
+        parameters:
+          type: "object"
+          properties:
+            operation:
+              type: "string"
+              description: "One of create_plan, inspect_visual, search_evidence, read_workspace, save_step, status, submit_report."
+              enum: ["create_plan", "inspect_visual", "search_evidence", "read_workspace", "save_step", "status", "submit_report"]
+            content:
+              type: "string"
+              description: >-
+                For save_step, the grounded step conclusion. For submit_report,
+                the complete Markdown report. Do not use this field for create_plan.
+            title:
+              type: "string"
+              description: "Plan title for create_plan."
+            steps:
+              type: "array"
+              items:
+                type: "string"
+              description: "For create_plan, 2-12 concise plan steps; the last step synthesizes the report."
+            dependencies:
+              type: "object"
+              description: "For create_plan, a map from step id strings to arrays of prerequisite step ids."
+              additionalProperties:
+                type: "array"
+                items:
+                  type: "integer"
+            query:
+              type: "string"
+              description: "Search query for search_evidence."
+            top_k:
+              type: "integer"
+              description: "Number of grounded evidence or frozen visual-observation records to return, from 1 to 5."
+            step_id:
+              type: "integer"
+              description: "Generated-plan step id for save_step."
+            evidence_ids:
+              type: "array"
+              description: "Evidence ids such as E1 and E3 used by a saved step."
+            artifact:
+              type: "string"
+              description: "Optional concise artifact name produced by the step."
+          required: ["operation"]

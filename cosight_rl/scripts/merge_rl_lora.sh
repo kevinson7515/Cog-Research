@@ -44,9 +44,6 @@ repair_empty_project_root_path() {
 pick_default_base_model() {
   local candidates=(
     "${PROJECT_ROOT}/outputs/qwen3-vl-8b-cosight-merged"
-    "${PROJECT_ROOT}/outputs/qwen3-vl-8b-cosight-merged-vision"
-    "${PROJECT_ROOT}/outputs/qwen3-vl-8b-cosight-stagewise-merged"
-    "${PROJECT_ROOT}/outputs/qwen3-vl-8b-sft"
   )
   local candidate
   for candidate in "${candidates[@]}"; do
@@ -59,8 +56,8 @@ pick_default_base_model() {
 }
 
 BASE_MODEL=${BASE_MODEL:-"$(pick_default_base_model)"}
-RL_CKPT_DIR=${RL_CKPT_DIR:-"${PROJECT_ROOT}/outputs/qwen3-vl-8b-rl-evidence-lora"}
-OUTPUT_DIR=${OUTPUT_DIR:-"${PROJECT_ROOT}/outputs/qwen3-vl-8b-rl-evidence-merged"}
+RL_CKPT_DIR=${RL_CKPT_DIR:-"${PROJECT_ROOT}/outputs/qwen3-vl-8b-rl-pro-lora"}
+OUTPUT_DIR=${OUTPUT_DIR:-"${PROJECT_ROOT}/outputs/qwen3-vl-8b-rl-pro-merged"}
 RL_LORA_PATH=${RL_LORA_PATH:-""}
 
 BASE_MODEL="$(repair_empty_project_root_path BASE_MODEL "${BASE_MODEL}")"

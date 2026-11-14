@@ -6,11 +6,11 @@
 #SBATCH --partition=q_amd_gpu_nvidia_A100_chenkh
 #SBATCH --gres=gpu:2
 #SBATCH --nodes=1
-#SBATCH -D /online1/ycsc_chenkh/hitici_07/Co-Sight-0
+#SBATCH -D /online1/ycsc_chenkh/hitici_07/Cog-Research
 
 set -euo pipefail
 
-DEFAULT_PROJECT_ROOT="/online1/ycsc_chenkh/hitici_07/Co-Sight-0"
+DEFAULT_PROJECT_ROOT="/online1/ycsc_chenkh/hitici_07/Cog-Research"
 if [[ -z "${PROJECT_ROOT:-}" || ! -f "${PROJECT_ROOT}/cosight_rl/scripts/common_slurm_env.sh" ]]; then
   export PROJECT_ROOT="${DEFAULT_PROJECT_ROOT}"
 fi

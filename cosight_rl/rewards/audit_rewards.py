@@ -17,7 +17,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from .reward_evaluator import evaluate_report
+from .reward_evaluator import FAILURE_CAPS, evaluate_report
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
@@ -231,14 +231,7 @@ def build_summary(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     worst = sorted(rows, key=lambda row: float(row["final_reward"]))[:20]
     hard_failure_rates = {
         reason: hard_gate_counter.get(reason, 0) / max(1, len(rows))
-        for reason in [
-            "wrong_visual_identity",
-            "fabricated_source_data",
-            "repetition_collapse",
-            "format_instruction_fail",
-            "core_quant_error",
-            "empty_or_crashed",
-        ]
+        for reason in FAILURE_CAPS
     }
     return {
         "records": len(rows),

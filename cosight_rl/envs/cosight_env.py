@@ -190,12 +190,12 @@ class CoSightRLEnv:
 
         workspace = self.prepare_workspace(task)
         try:
-            from CoSight import CoSight
+            from CogResearch import CogResearch
             from llm import llm_for_act, llm_for_plan, llm_for_tool, llm_for_vision
         except Exception as exc:
-            raise RuntimeError("Could not import CoSight runtime; check project dependencies and .env.") from exc
+            raise RuntimeError("Could not import CogResearch runtime; check project dependencies and .env.") from exc
 
-        cosight = CoSight(
+        cosight = CogResearch(
             llm_for_plan,
             llm_for_act,
             llm_for_tool,

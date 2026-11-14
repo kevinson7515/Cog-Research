@@ -1,0 +1,2 @@
+- name: cosight_plan_act_agent
+  _target_: cosight_rl.envs.plan_act_agent_loop.CoSightPlanActAgentLoop

@@ -121,6 +121,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume-mode", default=os.getenv("COSIGHT_RESUME_MODE", "disable"), choices=["auto", "disable", "resume_path"])
     parser.add_argument("--ray-num-cpus", type=int, default=int(os.getenv("COSIGHT_RAY_NUM_CPUS", "0")))
     parser.add_argument("--skip-prepare", action="store_true")
+    parser.add_argument("--combined-report-reward", action="store_true",
+                        help="Use claim/source verification in the report evidence reward.")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--print-command", action="store_true")
     parser.add_argument("--run", action="store_true")
@@ -215,6 +217,8 @@ def prepare_data(args: argparse.Namespace, project_root: Path) -> None:
     ]
     if args.include_evidence_in_prompt:
         cmd.append("--include_evidence_in_prompt")
+    if args.combined_report_reward:
+        cmd.extend(["--claim_source_trace", str(_project_path(project_root, args.trace_dir) / "actor_trace.jsonl")])
     if args.max_train_samples:
         cmd.extend(["--max_train_samples", str(args.max_train_samples)])
     if args.max_val_samples:
@@ -246,6 +250,7 @@ def build_launch_config(args: argparse.Namespace, project_root: Path) -> GRPOLau
         adv_estimator=args.adv_estimator,
         ray_num_cpus=args.ray_num_cpus,
         resume_mode=args.resume_mode,
+        combined_report_reward=args.combined_report_reward,
     )
 
 

@@ -131,7 +131,7 @@ class GRPOLaunchConfig:
     output_dir: Path
     gpus: int = 1
     exp_name: str = "qwen3-vl-8b-cosight-rl"
-    project_name: str = "CoSight-RL"
+    project_name: str = "CogResearch-RL"
     max_prompt_length: int = 8192
     max_response_length: int = 8192
     total_epochs: int = 1
@@ -147,6 +147,7 @@ class GRPOLaunchConfig:
     logger: str = '["console"]'
     ray_num_cpus: int = 0
     resume_mode: str = "disable"
+    combined_report_reward: bool = False
 
     @property
     def use_transfer_queue(self) -> bool:
@@ -342,6 +343,8 @@ class GRPOLaunchConfig:
             "ray_kwargs.ray_init.include_dashboard=False",
             f"++ray_kwargs.ray_init._temp_dir={ray_tmp_dir.as_posix()}",
         ]
+        if self.combined_report_reward:
+            overrides.append("++custom_reward_function.reward_kwargs.combined_report_reward=true")
         if self.use_transfer_queue:
             overrides.extend(
                 [

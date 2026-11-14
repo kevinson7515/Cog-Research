@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Shared Slurm/Singularity runtime for Co-Sight RL scripts.
+# Shared Slurm/Singularity runtime for cog-research RL scripts.
 # Source this file after `set -euo pipefail`.
 
 if command -v module >/dev/null 2>&1; then
@@ -19,7 +19,7 @@ LOCAL_PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DEFAULT_PROJECT_ROOT="${LOCAL_PROJECT_ROOT}"
 
 if [[ -n "${PROJECT_ROOT:-}" && ! -f "${PROJECT_ROOT}/cosight_rl/scripts/common_slurm_env.sh" ]]; then
-  echo "Ignoring invalid PROJECT_ROOT=${PROJECT_ROOT}; expected a Co-Sight checkout." >&2
+  echo "Ignoring invalid PROJECT_ROOT=${PROJECT_ROOT}; expected a cog-research checkout." >&2
   unset PROJECT_ROOT
 fi
 
@@ -36,7 +36,7 @@ export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 SIF_IMAGE="${SIF_IMAGE:-/online1/hpc_containers/base_hpc_glibc_235.sif}"
 CONDA_BIND="${CONDA_BIND:-/online1/hpc_containers/conda/}"
 PROJECT_BIND="${PROJECT_BIND:-/online1/ycsc_chenkh/hitici_07}"
-CONDA_ENV="${CONDA_ENV:-/home/export/base/ycsc_chenkh/hitici_07/online1/anaconda3/envs/co-sight}"
+CONDA_ENV="${CONDA_ENV:-/home/export/base/ycsc_chenkh/hitici_07/online1/anaconda3/envs/cog-research}"
 
 HTTP_PROXY_VALUE="${HTTP_PROXY_VALUE:-http://174.0.250.13:3128}"
 HTTPS_PROXY_VALUE="${HTTPS_PROXY_VALUE:-http://174.0.250.13:3128}"
@@ -218,6 +218,7 @@ run_in_runtime_env() {
           fi
         }
         pass_cosight_env COSIGHT_ADV_ESTIMATOR '${COSIGHT_ADV_ESTIMATOR:-}'
+        pass_cosight_env COSIGHT_ENABLE_HARD_GATES '${COSIGHT_ENABLE_HARD_GATES:-1}'
         pass_cosight_env COSIGHT_USE_TRANSFER_QUEUE '${COSIGHT_USE_TRANSFER_QUEUE:-}'
         pass_cosight_env COSIGHT_MODEL_PATH '${COSIGHT_MODEL_PATH:-}'
         pass_cosight_env COSIGHT_TRAIN_JSONL '${COSIGHT_TRAIN_JSONL:-}'
